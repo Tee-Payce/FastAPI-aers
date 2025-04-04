@@ -9,6 +9,9 @@ app = FastAPI()
 
 # Load YOLOv8 Model
 model = YOLO("best5.pt")
+@app.get("/")
+def read_root():
+    return {"message": "FastAPI is live on Render 🚀"}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
