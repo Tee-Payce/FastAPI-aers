@@ -17,13 +17,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # Load YOLOv8 Model
-model = YOLO("best5.pt")
+model = None
+
 @app.get("/")
 def read_root():
     return {"message": "FastAPI is live on Render 🚀"}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    global model
+    if model is None:
+        model = YOLO("best5.pt")
     await websocket.accept()
     print("🔗 WebSocket Connected")
 
