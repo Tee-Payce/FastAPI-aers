@@ -4,9 +4,18 @@ from PIL import Image
 import io
 import base64
 import cv2
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 app = FastAPI()
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or restrict to your domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Load YOLOv8 Model
 model = YOLO("best5.pt")
 @app.get("/")
