@@ -11,6 +11,7 @@ import os
 import tempfile
 import logging
 from typing import List, Dict
+import math
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,13 +26,13 @@ app = FastAPI(
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust as needed for production
+    allow_origins=["*"],  # Adjust for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global YOLO model instance
+# Global model instance
 model = None
 
 @app.on_event("startup")
@@ -95,56 +96,59 @@ async def process_video(file: UploadFile = File(...)):
         # Save video to a temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video:
             temp_path = temp_video.name
-            while chunk := await file.read(1024 * 1024):  # Read in 1MB chunks
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
                 temp_video.write(chunk)
 
         # Process video
         results = process_video_frames(temp_path)
+        logger.info("✅ Finished frame processing")
+        logger.info(f"🔍 Raw detections: {results}")
 
         # Delete temp file
         os.unlink(temp_path)
 
-        response_data = {
-         "success": True,
-         "detections": results,
-         "alert": len(results) > 0,
-         "processed_frames": len(results),
-         "filename": file.filename
-        }
-        logger.info(f"✅ Response data: {response_data}")
-
-        return JSONResponse(content=response_data)
-
+        try:
+            response_data = {
+                "success": True,
+                "detections": results,
+                "alert": len(results) > 0,
+                "processed_frames": len(results),
+                "filename": file.filename
+            }
+            logger.info(f"✅ Response data: {response_data}")
+            return JSONResponse(content=response_data)
+        except Exception as e:
+            logger.error(f"❌ Failed to serialize response: {str(e)}")
+            raise HTTPException(status_code=500, detail="Response serialization failed")
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ Video processing failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Video processing failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
 
 def process_detections(results) -> List[Dict]:
-    """Extract crashed/accident detections from YOLOv8 results."""
     detections = []
     for result in results:
         for box in result.boxes:
-            class_id = int(box.cls)
-            class_name = model.names[class_id]
-            confidence = float(box.conf)
+            try:
+                class_id = int(box.cls)
+                class_name = model.names[class_id]
+                confidence = float(box.conf)
 
-            if class_name in ["crashed", "accident"]:
-                detections.append({
-                    "class": class_name,
-                    "confidence": round(confidence, 4),
-                    "bbox": [round(x, 2) for x in box.xyxy[0].tolist()],
-                    "timestamp": getattr(result, "speed", {}).get("preprocess", 0)
-                })
+                if class_name in ["crashed", "accident"]:
+                    bbox = [round(x, 2) if isinstance(x, (float, int)) and not math.isnan(x) else 0.0 for x in box.xyxy[0].tolist()]
+                    detections.append({
+                        "class": class_name,
+                        "confidence": round(confidence, 4),
+                        "bbox": bbox,
+                        "timestamp": getattr(result, "speed", {}).get("preprocess", 0)
+                    })
+            except Exception as e:
+                logger.error(f"❌ Error processing box: {str(e)}")
     return detections
 
 def process_video_frames(video_path: str, frame_interval: int = 10) -> List[Dict]:
-    """Capture video frames and run YOLO detection every Nth frame."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError("Could not open video file")
@@ -166,11 +170,9 @@ def process_video_frames(video_path: str, frame_interval: int = 10) -> List[Dict
             if frame_count % frame_interval != 0:
                 continue
 
-            # Convert frame to RGB PIL image
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             pil_image = Image.fromarray(frame_rgb)
 
-            # Run detection
             results = model(pil_image)
             frame_detections = process_detections(results)
 
