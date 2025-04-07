@@ -36,6 +36,7 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()  # Receive base64 image
             image_bytes = base64.b64decode(data)
             image = Image.open(io.BytesIO(image_bytes))
+            print(f"🖼 Received image data ({len(data)} bytes)")
 
             # Run YOLOv8 inference
             results = model(image)
@@ -57,6 +58,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Send detection results back to the client
             await websocket.send_json({"detections": detections, "alert": len(detections) > 0})
+            
+
 
     except Exception as e:
         print(f"🔴 WebSocket Error: {e}")
