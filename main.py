@@ -20,7 +20,7 @@ app = FastAPI(
     title="Accident Detection API",
     description="API for processing video and image data for accident detection",
     version="1.0.0",
-    max_upload_size=1024 * 1024 * 250  # 100MB limit
+    max_upload_size=1024 * 1024 * 1000 # 100MB limit
 )
 
 # CORS Configuration
