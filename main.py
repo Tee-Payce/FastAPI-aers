@@ -104,13 +104,17 @@ async def process_video(file: UploadFile = File(...)):
         # Delete temp file
         os.unlink(temp_path)
 
-        return JSONResponse({
-            "success": True,
-            "detections": results,
-            "alert": len(results) > 0,
-            "processed_frames": len(results),
-            "filename": file.filename
-        })
+        response_data = {
+         "success": True,
+         "detections": results,
+         "alert": len(results) > 0,
+         "processed_frames": len(results),
+         "filename": file.filename
+        }
+        logger.info(f"✅ Response data: {response_data}")
+
+        return JSONResponse(content=response_data)
+
 
     except HTTPException:
         raise
