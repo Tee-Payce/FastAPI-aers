@@ -150,6 +150,8 @@ def process_detections(results) -> List[Dict]:
 
 @app.post("/video-processing")
 async def process_video(file: UploadFile = File(...)):
+    # Create uploads directory if it doesn't exist
+    os.makedirs('uploads', exist_ok=True)
     # Save the uploaded video
     video_path = f"uploads/{file.filename}"
     with open(video_path, "wb") as f:
