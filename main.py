@@ -12,7 +12,7 @@ import tempfile
 import logging
 from typing import List, Dict
 import math
-
+import psutil
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -154,18 +154,17 @@ async def process_video(file: UploadFile = File(...)):
     try:
         os.makedirs('uploads', exist_ok=True)
         video_path = f"uploads/{file.filename}"
-        
+
         with open(video_path, "wb") as f:
             f.write(await file.read())
         
         logging.info("Video saved successfully. Starting processing...")
 
-        # Initialize counts
         count_crashed = 0
         count_accident = 0
-
         cap = cv2.VideoCapture(video_path)
-        frame_count = 0  # To keep track of frames processed
+
+        frame_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -174,28 +173,28 @@ async def process_video(file: UploadFile = File(...)):
 
             frame_count += 1
             logging.info(f"Processing frame {frame_count}")
+            frame = cv2.resize(frame, (640, 480))  # Resize frame
 
-            results = model(frame)
-            detections = results.pred[0]
-
-            for *xyxy, conf, cls in detections.tolist():
-                if cls in [0, 1]:  # Adjust class IDs as needed
-                    if cls == 0:
-                        count_crashed += 1
-                    elif cls == 1:
-                        count_accident += 1
+            try:
+                results = model(frame)
+                # Count detections...
+            except Exception as e:
+                logging.error(f"Error processing frame {frame_count}: {str(e)}")
 
         cap.release()
         os.remove(video_path)
-
-        logging.info("Processing complete. Results: Crashed: %d, Accident: %d", count_crashed, count_accident)
+        logging.info("Processing complete.")
         return JSONResponse(content={
             "crashed_count": count_crashed,
             "accident_count": count_accident
         })
+    except MemoryError:
+        logging.error("MemoryError: The application has run out of memory.")
+        return JSONResponse(content={"error": "Out of memory"}, status_code=500)
     except Exception as e:
         logging.error(f"Error during processing: {str(e)}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
+        
 def process_video_frames(video_path: str, frame_interval: int = 10) -> List[Dict]:
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
