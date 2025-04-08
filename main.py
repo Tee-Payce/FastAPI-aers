@@ -151,43 +151,48 @@ def process_detections(results) -> List[Dict]:
 @app.post("/video-processing")
 async def process_video(file: UploadFile = File(...)):
     # Create uploads directory if it doesn't exist
-    os.makedirs('uploads', exist_ok=True)
+   try:    
+        os.makedirs('uploads', exist_ok=True)
     # Save the uploaded video
-    video_path = f"uploads/{file.filename}"
-    with open(video_path, "wb") as f:
-        f.write(await file.read())
-
-    # Initialize counts
-    count_crashed = 0
-    count_accident = 0
+        video_path = f"uploads/{file.filename}"
+        logging.info("Received video file for processing.")
+        with open(video_path, "wb") as f:
+            f.write(await file.read())
+        logging.info("Video saved successfully. Starting processing...")
+        # Initialize counts
+        count_crashed = 0
+        count_accident = 0
 
     # Process the video
-    cap = cv2.VideoCapture(video_path)
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+        cap = cv2.VideoCapture(video_path)
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
         # Perform detection
-        results = model(frame)
-        detections = results.pred[0]
+            results = model(frame)
+            detections = results.pred[0]
 
-        # Count specific classes
-        for *xyxy, conf, cls in detections.tolist():
-            if cls in [1, 2]:  # Assuming 'crashed' and 'accident' are class IDs 0 and 1
-                if cls == 1:  # Adjust according to your model's class mapping
-                    count_crashed += 1
-                elif cls == 2:
-                    count_accident += 1
+            # Count specific classes
+            for *xyxy, conf, cls in detections.tolist():
+                if cls in [1, 2]:  # Assuming 'crashed' and 'accident' are class IDs 0 and 1
+                    if cls == 1:  # Adjust according to your model's class mapping
+                        count_crashed += 1
+                    elif cls == 2:
+                        count_accident += 1
 
-    cap.release()
-    os.remove(video_path)  # Clean up the uploaded file
+        cap.release()
+        os.remove(video_path)  # Clean up the uploaded file
 
-    return JSONResponse(content={
-        "crashed_count": count_crashed,
-        "accident_count": count_accident
-    })
-
+        return JSONResponse(content={
+            "crashed_count": count_crashed,
+            "accident_count": count_accident
+        })
+        logging.info("Processing complete. Returning results.")
+    except Exception as e:
+        logging.error(f"Error during processing: {str(e)}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 def process_video_frames(video_path: str, frame_interval: int = 10) -> List[Dict]:
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
