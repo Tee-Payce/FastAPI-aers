@@ -159,31 +159,36 @@ async def process_video(file: UploadFile = File(...)):
             f.write(await file.read())
         
         logging.info("Video saved successfully. Starting processing...")
-        
+
         # Initialize counts
         count_crashed = 0
         count_accident = 0
 
         cap = cv2.VideoCapture(video_path)
+        frame_count = 0  # To keep track of frames processed
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
+                logging.info("No more frames to read.")
                 break
+
+            frame_count += 1
+            logging.info(f"Processing frame {frame_count}")
 
             results = model(frame)
             detections = results.pred[0]
 
             for *xyxy, conf, cls in detections.tolist():
-                if cls in [1, 2]:  # Adjust class IDs as needed
-                    if cls == 1:
+                if cls in [0, 1]:  # Adjust class IDs as needed
+                    if cls == 0:
                         count_crashed += 1
-                    elif cls == 2:
+                    elif cls == 1:
                         count_accident += 1
 
         cap.release()
         os.remove(video_path)
 
-        logging.info("Processing complete. Returning results.")
+        logging.info("Processing complete. Results: Crashed: %d, Accident: %d", count_crashed, count_accident)
         return JSONResponse(content={
             "crashed_count": count_crashed,
             "accident_count": count_accident
